@@ -11,7 +11,10 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "vercel:deploy": "vercel deploy --prod",
+    "vercel:preview": "vercel deploy",
+    "vercel:env:sync": "node scripts/sync-vercel-env.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
@@ -47,6 +50,7 @@
     "eslint-config-next": "^15.5.15",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vercel": "^51.7.0",
     "vitest": "^4.1.4"
   }
 }

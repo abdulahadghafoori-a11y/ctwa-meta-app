@@ -81,6 +81,21 @@ Production-oriented app for storing Click-to-WhatsApp (YCloud) sessions, recordi
 
 6. **YCloud webhooks:** Set the endpoint URL to `https://<your-vercel-domain>/api/webhooks/ycloud` (see [YCloud webhooks](#ycloud-webhooks) below).
 
+### Vercel CLI
+
+After [`vercel login`](https://vercel.com/docs/cli/login), from the project root:
+
+```bash
+npm install
+npx vercel link          # once: connect repo / project
+npx vercel deploy --prod # production
+npx vercel deploy        # preview deployment
+```
+
+Or use the scripts: `npm run vercel:deploy` / `npm run vercel:preview`. Copy env vars from `.env.local` into the Vercel project (**Settings → Environment Variables**) or use [`vercel env add`](https://vercel.com/docs/cli/env); secrets are not sent from your machine automatically.
+
+**Sync `.env.local` → Vercel (production):** after `vercel login` and `vercel link`, run `npm run vercel:env:sync`. It uploads non-empty keys from [`.env.example`](.env.example) (`DATABASE_URL`, Meta, optional YCloud). **Preview deployments** need variables added separately in the Vercel UI (Preview → all branches) or `vercel env add NAME preview <git-branch>`, because the CLI requires a branch name for Preview.
+
 ## Routes
 
 | Path | Purpose |
