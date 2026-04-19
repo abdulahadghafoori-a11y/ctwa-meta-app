@@ -2,47 +2,51 @@
 
 import { desc, eq } from "drizzle-orm";
 
-import { ctwaSessions } from "@/drizzle/schema";
+import { contacts, ctwaSessions } from "@/drizzle/schema";
 import { db } from "@/lib/db";
-import { normalizePhoneDigits } from "@/lib/phone";
+import { parseToE164 } from "@/lib/phone";
 
 export type CtwaSessionRow = {
   id: string;
   contactId: string;
+  contactName: string | null;
   ctwaClid: string;
   sourceId: string | null;
   sourceUrl: string | null;
   sourceType: string | null;
-  envelopeCreateTime: string | null;
   sendTime: string;
-  phoneNumber: string;
-  customerProfile: Record<string, unknown>;
-  createdAt: string;
 };
 
 export async function getCtwaSessionsByPhone(
   rawPhone: string,
 ): Promise<CtwaSessionRow[]> {
-  const digits = normalizePhoneDigits(rawPhone);
-  if (!digits) return [];
+  const e164 = parseToE164(rawPhone);
+  if (!e164) return [];
 
   const rows = await db
-    .select()
+    .select({
+      id: ctwaSessions.id,
+      contactId: ctwaSessions.contactId,
+      contactName: contacts.name,
+      ctwaClid: ctwaSessions.ctwaClid,
+      sourceId: ctwaSessions.sourceId,
+      sourceUrl: ctwaSessions.sourceUrl,
+      sourceType: ctwaSessions.sourceType,
+      sendTime: ctwaSessions.sendTime,
+    })
     .from(ctwaSessions)
-    .where(eq(ctwaSessions.phoneNumber, digits))
+    .innerJoin(contacts, eq(ctwaSessions.contactId, contacts.id))
+    .where(eq(contacts.phoneNumber, e164))
     .orderBy(desc(ctwaSessions.sendTime));
 
   return rows.map((r) => ({
     id: r.id,
     contactId: r.contactId,
+    contactName: r.contactName,
     ctwaClid: r.ctwaClid,
     sourceId: r.sourceId,
     sourceUrl: r.sourceUrl,
     sourceType: r.sourceType,
-    envelopeCreateTime: r.envelopeCreateTime?.toISOString() ?? null,
     sendTime: r.sendTime.toISOString(),
-    phoneNumber: r.phoneNumber,
-    customerProfile: r.customerProfile,
-    createdAt: r.createdAt.toISOString(),
   }));
 }

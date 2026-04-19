@@ -3,12 +3,15 @@
  * @see https://docs.ycloud.com — whatsapp.inbound_message.received
  */
 
+import { parseToE164 } from "@/lib/phone-e164";
+
 export const YCLOUD_WHATSAPP_INBOUND_TYPE = "whatsapp.inbound_message.received";
 
 export const YCLOUD_CONTACT_CREATED_TYPE = "contact.created";
 
-/** Fields persisted on ctwa_sessions (plus id, contact_id, created_at). */
+/** Parsed inbound webhook fields (contact upsert + session insert; session stores only FK + attribution + send_time). */
 export type WebhookSessionFields = {
+  /** E.164 with +; persisted on `contacts.phone_number` only. */
   phoneNumber: string;
   /** Display name for `contacts.name` (same semantics as contact.created `nickName`). */
   name: string | null;
@@ -19,13 +22,11 @@ export type WebhookSessionFields = {
   sourceType: string | null;
   envelopeCreateTime: Date | null;
   sendTime: Date;
-  /** Normalized digits; same as contacts.phone_number */
-  phoneNumberDigits: string;
 };
 
 /** Parsed `contact.created` payload (YCloud v2). */
 export type ContactCreatedFields = {
-  phoneNumberDigits: string;
+  phoneNumber: string;
   name: string | null;
   countryCode: string | null;
   countryName: string | null;
@@ -243,18 +244,20 @@ export function extractContactCreatedFields(
 
   const phoneRaw =
     typeof cc.phoneNumber === "string" ? cc.phoneNumber.replace(/\s/g, "") : "";
-  const digits = phoneRaw.replace(/\D/g, "");
-  if (!digits) return null;
+
+  const countryCode =
+    typeof cc.countryCode === "string" && cc.countryCode.trim()
+      ? cc.countryCode.trim()
+      : null;
+
+  const e164 = parseToE164(phoneRaw, countryCode);
+  if (!e164) return null;
 
   const name =
     typeof cc.nickName === "string" && cc.nickName.trim()
       ? cc.nickName.trim()
       : null;
 
-  const countryCode =
-    typeof cc.countryCode === "string" && cc.countryCode.trim()
-      ? cc.countryCode.trim()
-      : null;
   const countryName =
     typeof cc.countryName === "string" && cc.countryName.trim()
       ? cc.countryName.trim()
@@ -264,7 +267,7 @@ export function extractContactCreatedFields(
   if (!createTime) return null;
 
   return {
-    phoneNumberDigits: digits,
+    phoneNumber: e164,
     name,
     countryCode,
     countryName,
@@ -284,8 +287,8 @@ export function extractWebhookSessionFields(
     findPhoneFromMessage(message, body) ?? findPhoneLegacy(message);
   if (!phoneRaw) return null;
 
-  const digits = phoneRaw.replace(/\D/g, "");
-  if (!digits) return null;
+  const e164 = parseToE164(phoneRaw);
+  if (!e164) return null;
 
   const ctwaClid = findCtwaClid(message) ?? findCtwaClid(body);
   const { sourceId, sourceUrl, sourceType } = referralSourceFields(message);
@@ -300,7 +303,7 @@ export function extractWebhookSessionFields(
   const sendTime = new Date(ts * 1000);
 
   return {
-    phoneNumber: phoneRaw,
+    phoneNumber: e164,
     name: findCustomerNameFromInbound(message, body),
     customerProfile: customerProfileObject(message),
     ctwaClid: ctwaClid?.trim() ? ctwaClid.trim() : null,
@@ -309,6 +312,5 @@ export function extractWebhookSessionFields(
     sourceType,
     envelopeCreateTime,
     sendTime,
-    phoneNumberDigits: digits,
   };
 }

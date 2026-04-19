@@ -9,7 +9,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { orderItems, orders, products } from "@/drizzle/schema";
+import {
+  contacts,
+  ctwaSessions,
+  orderItems,
+  orders,
+  products,
+} from "@/drizzle/schema";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -18,14 +24,16 @@ export default async function DashboardPage() {
   const orderRows = await db
     .select({
       id: orders.id,
-      phone: orders.phoneNumber,
-      ctwa: orders.ctwaClid,
+      phone: contacts.phoneNumber,
+      ctwa: ctwaSessions.ctwaClid,
       value: orders.value,
       currency: orders.currency,
       capiSent: orders.capiSent,
       createdAt: orders.createdAt,
     })
     .from(orders)
+    .innerJoin(contacts, eq(orders.contactId, contacts.id))
+    .leftJoin(ctwaSessions, eq(orders.ctwaSessionId, ctwaSessions.id))
     .orderBy(desc(orders.createdAt))
     .limit(50);
 

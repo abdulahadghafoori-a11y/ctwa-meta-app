@@ -82,7 +82,7 @@ describe("extractWebhookSessionFields", () => {
   it("parses v2 inbound: digits, name, ISO sendTime, envelope createTime", () => {
     const n = extractWebhookSessionFields(inboundTextPlain);
     expect(n).not.toBeNull();
-    expect(n!.phoneNumberDigits).toBe("16315551111");
+    expect(n!.phoneNumber).toBe("+16315551111");
     expect(n!.name).toBe("Joe");
     expect(n!.sendTime.toISOString()).toBe("2023-02-22T12:00:00.000Z");
     expect(n!.envelopeCreateTime?.toISOString()).toBe(
@@ -106,7 +106,7 @@ describe("extractWebhookSessionFields", () => {
   it("parses real-world ad payload shape (Afghanistan digits, long ctwa_clid)", () => {
     const n = extractWebhookSessionFields(inboundCtwaAdRealShape);
     expect(n).not.toBeNull();
-    expect(n!.phoneNumberDigits).toBe("93708633447");
+    expect(n!.phoneNumber).toBe("+93708633447");
     expect(n!.name).toBe("Ali M");
     expect(n!.ctwaClid).toContain("AfigWU4hMRx5");
     expect(n!.sourceType).toBe("ad");
@@ -135,7 +135,7 @@ describe("extractContactCreatedFields", () => {
   it("parses contact.created: digits, name from nickName, country, createTime", () => {
     const n = extractContactCreatedFields(contactCreatedSample);
     expect(n).not.toBeNull();
-    expect(n!.phoneNumberDigits).toBe("93786884321");
+    expect(n!.phoneNumber).toBe("+93786884321");
     expect(n!.name).toBe("سلام");
     expect(n!.countryCode).toBe("AF");
     expect(n!.countryName).toBe("Afghanistan");

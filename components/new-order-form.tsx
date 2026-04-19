@@ -49,7 +49,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { summarizeCtwaSessionLabel } from "@/lib/referral";
 import { getPhonePresentation } from "@/lib/phone-display";
-import { isReasonablePhoneDigits, normalizePhoneDigits } from "@/lib/phone-digits";
+import { isValidE164Input } from "@/lib/phone-e164";
 import {
   type NewOrderFormInput,
   newOrderFormSchema,
@@ -131,8 +131,7 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
         setContactPhase({ status: "idle" });
         return;
       }
-      const digits = normalizePhoneDigits(trimmed);
-      if (!isReasonablePhoneDigits(digits)) {
+      if (!isValidE164Input(trimmed)) {
         setSessions([]);
         setValue("ctwaSessionId", "");
         setContactPhase({ status: "idle" });
@@ -182,11 +181,7 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
     }, 0);
   }, [lines]);
 
-  const phoneDigits = useMemo(
-    () => normalizePhoneDigits((phone ?? "").trim()),
-    [phone],
-  );
-  const phoneOk = isReasonablePhoneDigits(phoneDigits);
+  const phoneOk = isValidE164Input((phone ?? "").trim());
   const contactPresentation =
     contactPhase.status === "found"
       ? getPhonePresentation(contactPhase.contact.phoneNumber)

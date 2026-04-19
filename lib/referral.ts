@@ -1,16 +1,13 @@
-/** Human-readable line for CTWA session rows (slim schema). */
+/** Human-readable detail line for CTWA session pickers (name from contact, not stored JSON). */
 export function summarizeCtwaSessionLabel(s: {
-  customerProfile: Record<string, unknown>;
+  contactName: string | null;
   sourceType: string | null;
   sourceId: string | null;
   sourceUrl: string | null;
   sendTime: string;
 }): string {
   const parts: string[] = [];
-  const name =
-    typeof s.customerProfile.name === "string"
-      ? s.customerProfile.name.trim()
-      : null;
+  const name = s.contactName?.trim();
   if (name) parts.push(name);
   if (s.sourceType) parts.push(s.sourceType);
   if (s.sourceId) parts.push(`id ${s.sourceId}`);

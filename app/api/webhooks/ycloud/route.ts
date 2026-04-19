@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     }
     try {
       await upsertContactByPhone({
-        phoneNumber: fields.phoneNumberDigits,
+        phoneNumber: fields.phoneNumber,
         name: fields.name,
         countryCode: fields.countryCode,
         countryName: fields.countryName,
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 
   try {
     const contact = await upsertContactByPhone({
-      phoneNumber: fields.phoneNumberDigits,
+      phoneNumber: fields.phoneNumber,
       name: fields.name,
       createTime,
     });
@@ -105,10 +105,7 @@ export async function POST(request: Request) {
         sourceId: fields.sourceId,
         sourceUrl: fields.sourceUrl,
         sourceType: fields.sourceType,
-        envelopeCreateTime: fields.envelopeCreateTime,
-        sendTime: fields.sendTime,
-        phoneNumber: fields.phoneNumberDigits,
-        customerProfile: fields.customerProfile,
+        sendTime: createTime,
       })
       .onConflictDoNothing({
         target: [

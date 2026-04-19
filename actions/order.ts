@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { revalidatePath } from "next/cache";
 
@@ -13,7 +13,7 @@ import {
 } from "@/drizzle/schema";
 import { db } from "@/lib/db";
 import { sendMetaPurchaseEvent } from "@/lib/meta-capi";
-import { isReasonablePhoneDigits, normalizePhoneDigits } from "@/lib/phone";
+import { e164ToDigits, parseToE164 } from "@/lib/phone";
 import {
   APP_CURRENCY,
   createOrderSchema,
@@ -34,15 +34,15 @@ export async function createOrder(
   }
 
   const data = parsed.data;
-  const phoneDigits = normalizePhoneDigits(data.phone);
-  if (!isReasonablePhoneDigits(phoneDigits)) {
+  const phoneE164 = parseToE164(data.phone);
+  if (!phoneE164) {
     return { ok: false, error: "Enter a valid phone number (with country code)." };
   }
 
   const [contact] = await db
     .select()
     .from(contacts)
-    .where(eq(contacts.phoneNumber, phoneDigits))
+    .where(eq(contacts.phoneNumber, phoneE164))
     .limit(1);
 
   if (!contact) {
@@ -82,8 +82,7 @@ export async function createOrder(
   const orderTotal = resolved.reduce((s, r) => s + r.lineValue, 0);
   const totalQuantity = resolved.reduce((s, r) => s + r.quantity, 0);
 
-  const internalOrderId =
-    data.orderId?.trim() || `ORD-${nanoid(10).toUpperCase()}`;
+  const orderPk = data.orderId?.trim() || `ORD-${nanoid(10).toUpperCase()}`;
 
   const sessionIdEmpty =
     !data.ctwaSessionId || data.ctwaSessionId.trim() === "";
@@ -91,7 +90,10 @@ export async function createOrder(
   const [anySessionForPhone] = await db
     .select({ id: ctwaSessions.id })
     .from(ctwaSessions)
-    .where(eq(ctwaSessions.phoneNumber, phoneDigits))
+    .innerJoin(contacts, eq(ctwaSessions.contactId, contacts.id))
+    .where(
+      and(eq(contacts.phoneNumber, phoneE164), eq(contacts.id, contact.id)),
+    )
     .limit(1);
 
   if (sessionIdEmpty) {
@@ -105,11 +107,9 @@ export async function createOrder(
     const [inserted] = await db
       .insert(orders)
       .values({
-        orderId: internalOrderId,
-        phoneNumber: phoneDigits,
+        id: orderPk,
         contactId: contact.id,
         ctwaSessionId: null,
-        ctwaClid: null,
         value: orderTotal.toFixed(4),
         currency: APP_CURRENCY,
         status: data.status,
@@ -122,8 +122,9 @@ export async function createOrder(
 
     try {
       await db.insert(orderItems).values(
-        resolved.map((r) => ({
+        resolved.map((r, lineIndex) => ({
           orderId: inserted.id,
+          lineIndex,
           productId: r.product.id,
           quantity: r.quantity,
           unitSalePrice: r.unit.toFixed(4),
@@ -141,7 +142,7 @@ export async function createOrder(
 
     return {
       ok: true,
-      orderId: internalOrderId,
+      orderId: orderPk,
       capiEventId: "",
     };
   }
@@ -154,12 +155,6 @@ export async function createOrder(
 
   if (!session) {
     return { ok: false, error: "CTWA session not found." };
-  }
-  if (session.phoneNumber !== phoneDigits) {
-    return {
-      ok: false,
-      error: "Selected session does not match the phone number.",
-    };
   }
   if (!session.ctwaClid) {
     return {
@@ -178,11 +173,9 @@ export async function createOrder(
   const [inserted] = await db
     .insert(orders)
     .values({
-      orderId: internalOrderId,
-      phoneNumber: phoneDigits,
+      id: orderPk,
       contactId: session.contactId,
       ctwaSessionId: session.id,
-      ctwaClid: session.ctwaClid,
       value: orderTotal.toFixed(4),
       currency: APP_CURRENCY,
       status: data.status,
@@ -195,8 +188,9 @@ export async function createOrder(
 
   try {
     await db.insert(orderItems).values(
-      resolved.map((r) => ({
+      resolved.map((r, lineIndex) => ({
         orderId: inserted.id,
+        lineIndex,
         productId: r.product.id,
         quantity: r.quantity,
         unitSalePrice: r.unit.toFixed(4),
@@ -212,7 +206,7 @@ export async function createOrder(
   let capiEventIdResult = "";
   try {
     const { eventId } = await sendMetaPurchaseEvent({
-      orderId: internalOrderId,
+      orderId: orderPk,
       value: orderTotal,
       currency: APP_CURRENCY,
       totalQuantity,
@@ -223,7 +217,7 @@ export async function createOrder(
         lineValue: r.lineValue,
       })),
       ctwaClid: session.ctwaClid,
-      phoneDigits,
+      phoneDigits: e164ToDigits(contact.phoneNumber),
     });
     capiEventIdResult = eventId;
 
@@ -251,7 +245,7 @@ export async function createOrder(
 
   return {
     ok: true,
-    orderId: internalOrderId,
+    orderId: orderPk,
     capiEventId: updated?.capiEventId ?? capiEventIdResult,
   };
 }

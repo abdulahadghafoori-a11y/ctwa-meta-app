@@ -64,6 +64,20 @@
       "when": 1776563962700,
       "tag": "0008_contacts_name_country_create_time",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1776563962800,
+      "tag": "0009_schema_normalize",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1776563962900,
+      "tag": "0010_idempotent_schema_align",
+      "breakpoints": true
     }
   ]
 }

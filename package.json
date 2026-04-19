@@ -12,6 +12,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "db:repair": "node scripts/db-audit-and-repair.mjs",
     "vercel:deploy": "vercel deploy --prod",
     "vercel:preview": "vercel deploy",
     "vercel:env:sync": "node scripts/sync-vercel-env.mjs"
