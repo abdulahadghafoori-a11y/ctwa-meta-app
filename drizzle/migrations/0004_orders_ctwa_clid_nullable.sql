@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ALTER COLUMN "ctwa_clid" DROP NOT NULL;
