@@ -69,7 +69,6 @@ import {
   orderConfirmStorageKey,
   type OrderConfirmClientPayload,
 } from "@/lib/order-confirmation-storage";
-import { cn } from "@/lib/utils";
 
 type FormValues = NewOrderFormInput;
 
@@ -281,18 +280,14 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
       );
       return;
     }
-    if (isDevReviewUi) {
-      setReviewLoading(true);
-      const preview = await previewOrderCapiPayload({ ...values });
-      setReviewLoading(false);
-      if (!preview.ok) {
-        toast.error(preview.error);
-        return;
-      }
-      setReviewPayloadJson(preview.payloadJson);
-    } else {
-      setReviewPayloadJson(null);
+    setReviewLoading(true);
+    const preview = await previewOrderCapiPayload({ ...values });
+    setReviewLoading(false);
+    if (!preview.ok) {
+      toast.error(preview.error);
+      return;
     }
+    setReviewPayloadJson(preview.payloadJson);
     setReviewValues(values);
     setReviewOpen(true);
   }
@@ -669,18 +664,9 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
             }
           }}
         >
-          <DialogContent
-            className={cn(
-              "flex max-h-[min(90vh,40rem)] flex-col gap-0 p-0",
-              isDevReviewUi ? "max-w-2xl" : "max-w-lg",
-            )}
-          >
+          <DialogContent className="flex max-h-[min(90vh,40rem)] max-w-2xl flex-col gap-0 p-0">
             <DialogHeader className="shrink-0 border-b px-6 py-4">
-              <DialogTitle>
-                {isDevReviewUi
-                  ? "Review order & CAPI payload"
-                  : "Review order"}
-              </DialogTitle>
+              <DialogTitle>Review order &amp; CAPI payload</DialogTitle>
               <DialogDescription>
                 {isDevReviewUi ? (
                   <>
@@ -690,7 +676,11 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
                     only if Meta accepts the event.
                   </>
                 ) : (
-                  "Confirm contact, line items, and payment status before creating the order."
+                  <>
+                    Confirm contact, line items, and payment status. JSON below
+                    is the CAPI body (placeholder order id{" "}
+                    <code className="text-xs">PREVIEW</code> until you confirm).
+                  </>
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -907,7 +897,7 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
                   </div>
                 </div>
               ) : null}
-              {isDevReviewUi && reviewPayloadJson ? (
+              {reviewPayloadJson ? (
                 <div>
                   <p className="text-muted-foreground mb-2 text-xs font-medium uppercase">
                     CAPI JSON (preview)
