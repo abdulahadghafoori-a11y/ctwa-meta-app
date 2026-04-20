@@ -33,6 +33,7 @@ export const contacts = pgTable(
  * One row per CTWA referral session (unique on contact + clid + send_time).
  * `send_time` is the earliest of message send vs envelope time (and legacy ingest time on migrate).
  * Phone and display name live on `contacts` via `contact_id`.
+ * `waba_id` comes from YCloud `whatsappInboundMessage.wabaId` (Meta WABA for CAPI).
  */
 export const ctwaSessions = pgTable(
   "ctwa_sessions",
@@ -42,6 +43,7 @@ export const ctwaSessions = pgTable(
       .notNull()
       .references(() => contacts.id, { onDelete: "cascade" }),
     ctwaClid: text("ctwa_clid").notNull(),
+    wabaId: text("waba_id"),
     sourceId: text("source_id"),
     sourceUrl: text("source_url"),
     sourceType: text("source_type"),

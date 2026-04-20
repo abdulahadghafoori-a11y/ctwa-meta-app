@@ -16,6 +16,8 @@ export type WebhookSessionFields = {
   /** Display name for `contacts.name` (same semantics as contact.created `nickName`). */
   name: string | null;
   customerProfile: Record<string, unknown>;
+  /** YCloud `whatsappInboundMessage.wabaId` — Meta WhatsApp Business Account id. */
+  wabaId: string | null;
   ctwaClid: string | null;
   sourceId: string | null;
   sourceUrl: string | null;
@@ -198,6 +200,17 @@ function customerProfileObject(message: unknown): Record<string, unknown> {
   return {};
 }
 
+function findWabaId(message: unknown): string | null {
+  const msg = asRecord(message);
+  const a = typeof msg?.wabaId === "string" ? msg.wabaId.trim() : "";
+  const b =
+    typeof msg?.whatsappBusinessAccountId === "string"
+      ? msg.whatsappBusinessAccountId.trim()
+      : "";
+  const raw = a || b;
+  return raw.length > 0 ? raw : null;
+}
+
 function referralSourceFields(message: unknown): {
   sourceId: string | null;
   sourceUrl: string | null;
@@ -301,11 +314,13 @@ export function extractWebhookSessionFields(
   const ts =
     findTimestampSeconds(message, body) ?? Math.floor(Date.now() / 1000);
   const sendTime = new Date(ts * 1000);
+  const wabaId = findWabaId(message);
 
   return {
     phoneNumber: e164,
     name: findCustomerNameFromInbound(message, body),
     customerProfile: customerProfileObject(message),
+    wabaId,
     ctwaClid: ctwaClid?.trim() ? ctwaClid.trim() : null,
     sourceId,
     sourceUrl,

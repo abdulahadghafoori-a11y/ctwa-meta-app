@@ -16,7 +16,8 @@ config({ path: resolve(root, ".env.local"), override: true });
 const KEYS = [
   "DATABASE_URL",
   "META_ACCESS_TOKEN",
-  "META_PIXEL_ID",
+  "META_DATASET_ID",
+  "META_WHATSAPP_BUSINESS_ACCOUNT_ID",
   "META_TEST_EVENT_CODE",
   "YCLOUD_WEBHOOK_SECRET",
 ];

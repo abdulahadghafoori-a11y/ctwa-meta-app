@@ -11,6 +11,7 @@ export type CtwaSessionRow = {
   contactId: string;
   contactName: string | null;
   ctwaClid: string;
+  wabaId: string | null;
   sourceId: string | null;
   sourceUrl: string | null;
   sourceType: string | null;
@@ -29,6 +30,7 @@ export async function getCtwaSessionsByPhone(
       contactId: ctwaSessions.contactId,
       contactName: contacts.name,
       ctwaClid: ctwaSessions.ctwaClid,
+      wabaId: ctwaSessions.wabaId,
       sourceId: ctwaSessions.sourceId,
       sourceUrl: ctwaSessions.sourceUrl,
       sourceType: ctwaSessions.sourceType,
@@ -44,6 +46,7 @@ export async function getCtwaSessionsByPhone(
     contactId: r.contactId,
     contactName: r.contactName,
     ctwaClid: r.ctwaClid,
+    wabaId: r.wabaId,
     sourceId: r.sourceId,
     sourceUrl: r.sourceUrl,
     sourceType: r.sourceType,

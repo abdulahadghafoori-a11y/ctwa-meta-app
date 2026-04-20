@@ -102,6 +102,7 @@ export async function POST(request: Request) {
       .values({
         contactId: contact.id,
         ctwaClid: fields.ctwaClid,
+        wabaId: fields.wabaId,
         sourceId: fields.sourceId,
         sourceUrl: fields.sourceUrl,
         sourceType: fields.sourceType,

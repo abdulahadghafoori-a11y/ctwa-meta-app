@@ -78,6 +78,27 @@
       "when": 1776563962900,
       "tag": "0010_idempotent_schema_align",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1776563963000,
+      "tag": "0011_ctwa_sessions_waba_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1776563963100,
+      "tag": "0012_backfill_ctwa_sessions_waba_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1776563963200,
+      "tag": "0013_ctwa_sessions_waba_id_force_all",
+      "breakpoints": true
     }
   ]
 }

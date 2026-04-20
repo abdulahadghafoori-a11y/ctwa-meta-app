@@ -89,6 +89,7 @@ describe("extractWebhookSessionFields", () => {
       "2023-02-22T12:00:00.000Z",
     );
     expect(n!.customerProfile).toMatchObject({ name: "Joe" });
+    expect(n!.wabaId).toBe("WABA-ID");
     expect(n!.ctwaClid).toBeNull();
   });
 
@@ -101,6 +102,7 @@ describe("extractWebhookSessionFields", () => {
     expect(n!.sourceType).toBe("ad");
     expect(n!.sourceId).toBe("MEDIA-ID");
     expect(n!.sourceUrl).toBe("https://fb.me/xxx");
+    expect(n!.wabaId).toBe("WABA-ID");
   });
 
   it("parses real-world ad payload shape (Afghanistan digits, long ctwa_clid)", () => {
@@ -112,6 +114,7 @@ describe("extractWebhookSessionFields", () => {
     expect(n!.sourceType).toBe("ad");
     expect(n!.sourceId).toBe("120236523318720395");
     expect(n!.customerProfile).toEqual({ name: "Ali M" });
+    expect(n!.wabaId).toBe("1413787536842677");
   });
 });
 

@@ -6,7 +6,7 @@ Production-oriented app for storing Click-to-WhatsApp (YCloud) sessions, recordi
 
 - Node.js 20+
 - A [Neon](https://neon.tech) database
-- Meta **Pixel ID**, **Access Token** with Conversions API permissions, and (optionally) a **Test Event Code**
+- Meta **Dataset ID** (Events Manager) and **Access Token** with Conversions API permissions. For local/`next dev`, a **Test Event Code** (`META_TEST_EVENT_CODE`) is **required** so CAPI sends test events; production builds ignore it and send live **Purchase** events only. WABA is taken from each CTWA session when YCloud sends `wabaId`, with env fallback if needed
 
 ## Setup
 
@@ -23,8 +23,9 @@ Production-oriented app for storing Click-to-WhatsApp (YCloud) sessions, recordi
 
    - `DATABASE_URL` — Neon connection string (pooled URL is fine for serverless).
    - `META_ACCESS_TOKEN` — from Meta Business / System User.
-   - `META_PIXEL_ID` — the Pixel (dataset) used in Events Manager.
-   - Optional: `META_TEST_EVENT_CODE` — for Test Events in Events Manager.
+   - `META_DATASET_ID` — the **Dataset ID** from Meta Events Manager (same value used in the CAPI `/{dataset-id}/events` path). If unset, `META_PIXEL_ID` is still read for backward compatibility (same numeric id).
+   - `META_WHATSAPP_BUSINESS_ACCOUNT_ID` — optional **fallback** WABA if a CTWA session row has no `waba_id` (YCloud inbound normally stores `whatsappInboundMessage.wabaId` on each session).
+   - `META_TEST_EVENT_CODE` — **required** when not in production (`next dev`): CAPI sends `TestEvent` with this code. In production (`NODE_ENV=production`) it is **not** read; CAPI sends live `Purchase` events only.
    - Optional: `YCLOUD_WEBHOOK_SECRET` — signing secret from [YCloud Webhooks](https://docs.ycloud.com/reference/configure-webhooks); if set, `POST /api/webhooks/ycloud` requires a valid `YCloud-Signature` header.
 
 3. **Database schema**
@@ -69,8 +70,9 @@ Production-oriented app for storing Click-to-WhatsApp (YCloud) sessions, recordi
    |----------|--------|
    | `DATABASE_URL` | Neon pooled string (use a Neon *production* branch/database for prod). |
    | `META_ACCESS_TOKEN` | Meta system user token. |
-   | `META_PIXEL_ID` | Pixel / dataset id. |
-   | `META_TEST_EVENT_CODE` | Optional — Test Events. |
+   | `META_DATASET_ID` | Events Manager dataset id (CAPI). |
+   | `META_WHATSAPP_BUSINESS_ACCOUNT_ID` | Optional fallback if session has no `waba_id`. |
+   | `META_TEST_EVENT_CODE` | Required for Preview/local dev (test events). Omit or unused in production. |
    | `YCLOUD_WEBHOOK_SECRET` | From YCloud Webhook endpoint (required if you enforce signatures). |
 
 5. **Deploy.** After the first deploy, run migrations against the **production** database (from your machine with prod `DATABASE_URL`, or a one-off CI job):
@@ -116,7 +118,7 @@ Or use the scripts: `npm run vercel:deploy` / `npm run vercel:preview`. Copy env
 
 ## YCloud → Meta
 
-- This repo sends **Graph API** `/{pixel-id}/events` from `lib/meta-capi.ts`.
+- This repo sends **Graph API** `/{dataset-id}/events` from `lib/meta-capi.ts` (same numeric id shown as Dataset ID in Events Manager).
 - **Alternative:** route events through **YCloud Custom Event / forwarding** so YCloud calls Meta and this app only stores orders — see comments in `lib/meta-capi.ts` and the webhook route.
 
 ## shadcn/ui

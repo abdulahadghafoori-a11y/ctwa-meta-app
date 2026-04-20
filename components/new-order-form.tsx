@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2Icon, PlusIcon, Trash2Icon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -10,7 +11,7 @@ import {
   getContactByPhone,
   type ContactLookup,
 } from "@/actions/contact";
-import { createOrder } from "@/actions/order";
+import { createOrder, previewOrderCapiPayload } from "@/actions/order";
 import type { CtwaSessionRow } from "@/actions/ctwa";
 import { getCtwaSessionsByPhone } from "@/actions/ctwa";
 import type { ProductRow } from "@/actions/products";
@@ -47,6 +48,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { summarizeCtwaSessionLabel } from "@/lib/referral";
 import { getPhonePresentation } from "@/lib/phone-display";
 import { isValidE164Input } from "@/lib/phone-e164";
@@ -55,6 +65,11 @@ import {
   newOrderFormSchema,
   orderStatuses,
 } from "@/lib/validations/order";
+import {
+  orderConfirmStorageKey,
+  type OrderConfirmClientPayload,
+} from "@/lib/order-confirmation-storage";
+import { cn } from "@/lib/utils";
 
 type FormValues = NewOrderFormInput;
 
@@ -90,15 +105,19 @@ function defaultLine(products: ProductRow[]) {
 }
 
 export function NewOrderForm({ products }: { products: ProductRow[] }) {
+  const router = useRouter();
   const [sessions, setSessions] = useState<CtwaSessionRow[]>([]);
   const [loadingPhoneData, setLoadingPhoneData] = useState(false);
   const [contactPhase, setContactPhase] = useState<ContactPhase>({
     status: "idle",
   });
   const [pending, startTransition] = useTransition();
-  const [noSessionConfirmOpen, setNoSessionConfirmOpen] = useState(false);
-  const [pendingOrderValues, setPendingOrderValues] =
-    useState<FormValues | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewPayloadJson, setReviewPayloadJson] = useState<string | null>(
+    null,
+  );
+  const [reviewValues, setReviewValues] = useState<FormValues | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(newOrderFormSchema),
@@ -117,10 +136,12 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
   });
 
   const phone = form.watch("phone");
-  const ctwaSessionId = form.watch("ctwaSessionId");
   const lines = form.watch("lines");
 
-  const selectedSession = sessions.find((s) => s.id === ctwaSessionId);
+  const latestSession = useMemo(
+    () => (sessions.length > 0 ? sessions[0] : undefined),
+    [sessions],
+  );
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -145,10 +166,7 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
       ])
         .then(([rows, contact]) => {
           setSessions(rows);
-          setValue(
-            "ctwaSessionId",
-            rows.length > 0 ? (rows[0]?.id ?? "") : "",
-          );
+          setValue("ctwaSessionId", rows[0]?.id ?? "");
           if (contact) {
             setContactPhase({ status: "found", contact });
           } else {
@@ -181,18 +199,41 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
     }, 0);
   }, [lines]);
 
+  const reviewSummary = useMemo(() => {
+    if (!reviewValues) return null;
+    const ctwaSession = reviewValues.ctwaSessionId
+      ? sessions.find((s) => s.id === reviewValues.ctwaSessionId)
+      : sessions[0];
+    const lineRows = reviewValues.lines.map((line, i) => {
+      const p = products.find((x) => x.id === line.productId);
+      const unit = line.unitSalePrice;
+      const qty = line.quantity;
+      return {
+        key: `${line.productId}-${i}`,
+        lineNum: i + 1,
+        name: p?.name ?? "Unknown product",
+        sku: p?.sku ?? "—",
+        unit,
+        qty,
+        lineTotal: unit * qty,
+      };
+    });
+    const total = lineRows.reduce((s, r) => s + r.lineTotal, 0);
+    return { ctwaSession, lineRows, total };
+  }, [reviewValues, products, sessions]);
+
+  const isDevReviewUi = process.env.NODE_ENV === "development";
+
   const phoneOk = isValidE164Input((phone ?? "").trim());
   const contactPresentation =
     contactPhase.status === "found"
       ? getPhonePresentation(contactPhase.contact.phoneNumber)
       : null;
-  const needsSessionPick = sessions.length > 0 && !ctwaSessionId;
   const submitDisabled =
     pending ||
     loadingPhoneData ||
     !phoneOk ||
-    contactPhase.status !== "found" ||
-    needsSessionPick;
+    contactPhase.status !== "found";
 
   function runCreateOrder(values: FormValues) {
     startTransition(() => {
@@ -204,24 +245,25 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
           toast.error(res.error);
           return;
         }
-        if (res.capiEventId) {
-          toast.success(`Order ${res.orderId} created; CAPI event queued.`, {
-            description: "Verify delivery in Meta Events Manager.",
-            action: {
-              label: "Open Events Manager",
-              onClick: () =>
-                window.open(
-                  "https://business.facebook.com/events_manager2",
-                  "_blank",
-                ),
-            },
-          });
-        } else {
-          toast.success(`Order ${res.orderId} created.`, {
-            description:
-              "No CTWA session — Meta Purchase was not sent for this order.",
-          });
+        const capiPayload: OrderConfirmClientPayload = {
+          capiPayloadJson: res.capiPayloadJson,
+          capiSent: res.capiSent,
+          capiError: res.capiError,
+          capiEventId: res.capiEventId,
+        };
+        try {
+          sessionStorage.setItem(
+            orderConfirmStorageKey(res.orderId),
+            JSON.stringify(capiPayload),
+          );
+        } catch {
+          /* ignore quota / private mode */
         }
+        setReviewOpen(false);
+        setReviewPayloadJson(null);
+        setReviewValues(null);
+        toast.success(`Order ${res.orderId} saved.`);
+        router.push(`/orders/${res.orderId}/confirmation`);
         form.reset({
           phone: values.phone,
           ctwaSessionId: sessions[0]?.id ?? "",
@@ -232,23 +274,27 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
     });
   }
 
-  function onSubmit(values: FormValues) {
+  async function onSubmit(values: FormValues) {
     if (contactPhase.status !== "found") {
       toast.error(
         "No contact found for this number. The customer must reach you on WhatsApp first.",
       );
       return;
     }
-    if (sessions.length > 0 && !values.ctwaSessionId) {
-      toast.error("Select a CTWA session.");
-      return;
+    if (isDevReviewUi) {
+      setReviewLoading(true);
+      const preview = await previewOrderCapiPayload({ ...values });
+      setReviewLoading(false);
+      if (!preview.ok) {
+        toast.error(preview.error);
+        return;
+      }
+      setReviewPayloadJson(preview.payloadJson);
+    } else {
+      setReviewPayloadJson(null);
     }
-    if (sessions.length === 0 && (phone ?? "").trim()) {
-      setPendingOrderValues(values);
-      setNoSessionConfirmOpen(true);
-      return;
-    }
-    runCreateOrder(values);
+    setReviewValues(values);
+    setReviewOpen(true);
   }
 
   return (
@@ -257,9 +303,10 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
         <CardTitle className="text-xl">New order</CardTitle>
         <CardDescription>
           The phone must match a contact already in the system (from WhatsApp).
-          Link the sale to a CTWA session when available, then send a Purchase
-          event to Meta. If there is no session for the number, you can still
-          record the order after confirming.
+          The latest CTWA session is used when present (for{" "}
+          <code className="text-xs">ctwa_clid</code>); otherwise Meta CAPI is
+          sent without it. You will review the payload before the order is
+          created.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -295,35 +342,28 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
                   name="ctwaSessionId"
                   render={({ field }) => (
                     <FormItem className="min-w-0">
-                      <FormLabel>CTWA session</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                        disabled={!sessions.length || loadingPhoneData}
-                      >
-                        <FormControl>
-                          <SelectTrigger
-                            size="sm"
-                            className="h-9 w-full min-w-0 max-w-full"
-                          >
-                            <SelectValue placeholder="Select session">
-                              {selectedSession
-                                ? sessionTriggerLabel(selectedSession)
-                                : undefined}
-                            </SelectValue>
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {sessions.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              <span className="block max-w-[min(100vw-4rem,28rem)] truncate">
-                                {sessionTriggerLabel(s)} —{" "}
-                                {summarizeCtwaSessionLabel(s)}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormLabel>CTWA session (latest)</FormLabel>
+                      <input type="hidden" {...field} />
+                      <FormControl>
+                        <Input
+                          readOnly
+                          tabIndex={-1}
+                          className="h-9 w-full min-w-0 max-w-full cursor-default bg-muted/50 font-mono text-sm"
+                          disabled={loadingPhoneData}
+                          value={
+                            latestSession
+                              ? `${sessionTriggerLabel(latestSession)} · ${summarizeCtwaSessionLabel(latestSession)}`
+                              : loadingPhoneData
+                                ? "…"
+                                : "No session for this number"
+                          }
+                        />
+                      </FormControl>
+                      {latestSession?.wabaId ? (
+                        <p className="text-muted-foreground font-mono text-xs">
+                          WABA {latestSession.wabaId}
+                        </p>
+                      ) : null}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -604,57 +644,303 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
 
             <Button
               className="w-full sm:w-auto"
-              disabled={submitDisabled}
+              disabled={submitDisabled || reviewLoading}
               type="submit"
             >
-              {pending ? (
+              {pending || reviewLoading ? (
                 <>
                   <Loader2Icon className="mr-2 size-4 animate-spin" />
-                  Working…
+                  {reviewLoading ? "Preparing review…" : "Working…"}
                 </>
-              ) : sessions.length > 0 ? (
-                "Create order & send CAPI event"
               ) : (
-                "Create order"
+                "Review & create order"
               )}
             </Button>
           </form>
         </Form>
 
         <Dialog
-          open={noSessionConfirmOpen}
+          open={reviewOpen}
           onOpenChange={(open) => {
-            setNoSessionConfirmOpen(open);
-            if (!open) setPendingOrderValues(null);
+            setReviewOpen(open);
+            if (!open) {
+              setReviewPayloadJson(null);
+              setReviewValues(null);
+            }
           }}
         >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>No CTWA session for this number</DialogTitle>
+          <DialogContent
+            className={cn(
+              "flex max-h-[min(90vh,40rem)] flex-col gap-0 p-0",
+              isDevReviewUi ? "max-w-2xl" : "max-w-lg",
+            )}
+          >
+            <DialogHeader className="shrink-0 border-b px-6 py-4">
+              <DialogTitle>
+                {isDevReviewUi
+                  ? "Review order & CAPI payload"
+                  : "Review order"}
+              </DialogTitle>
               <DialogDescription>
-                There are no WhatsApp referral sessions stored for this phone
-                yet. You can still save this order without CTWA attribution. Meta
-                Purchase will not be sent.
+                {isDevReviewUi ? (
+                  <>
+                    Preview uses placeholder order id{" "}
+                    <code className="text-xs">PREVIEW</code> until you confirm.
+                    After you confirm, Meta CAPI is called and the order is saved
+                    only if Meta accepts the event.
+                  </>
+                ) : (
+                  "Confirm contact, line items, and payment status before creating the order."
+                )}
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter className="gap-2 sm:justify-end">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+              {reviewValues && contactPhase.status === "found" && reviewSummary ? (
+                <div className="space-y-4 text-sm">
+                  {isDevReviewUi ? (
+                    <>
+                      <div>
+                        <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
+                          Attribution
+                        </p>
+                        <dl className="grid gap-1.5 text-xs sm:grid-cols-2">
+                          <div className="min-w-0 sm:col-span-2">
+                            <dt className="text-muted-foreground">Phone</dt>
+                            <dd className="font-mono tabular-nums">
+                              {
+                                getPhonePresentation(
+                                  contactPhase.contact.phoneNumber,
+                                ).formattedInternational
+                              }
+                            </dd>
+                          </div>
+                          <div className="min-w-0 sm:col-span-2">
+                            <dt className="text-muted-foreground">CTWA session</dt>
+                            <dd>
+                              {reviewSummary.ctwaSession
+                                ? `${sessionTriggerLabel(reviewSummary.ctwaSession)} · ${summarizeCtwaSessionLabel(reviewSummary.ctwaSession)}`
+                                : "No session — CAPI without ctwa_clid"}
+                            </dd>
+                          </div>
+                          {reviewSummary.ctwaSession?.wabaId ? (
+                            <div className="min-w-0 sm:col-span-2">
+                              <dt className="text-muted-foreground">WABA</dt>
+                              <dd className="font-mono text-xs break-all">
+                                {reviewSummary.ctwaSession.wabaId}
+                              </dd>
+                            </div>
+                          ) : null}
+                        </dl>
+                      </div>
+
+                      <div className="bg-muted/50 space-y-2 rounded-lg border p-3">
+                        <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                          Contact
+                        </p>
+                        <dl className="grid gap-1.5 text-xs sm:grid-cols-2">
+                          <div className="min-w-0 sm:col-span-2">
+                            <dt className="text-muted-foreground">Name</dt>
+                            <dd className="font-medium">
+                              {contactPhase.contact.name?.trim() || "—"}
+                            </dd>
+                          </div>
+                          <div className="min-w-0">
+                            <dt className="text-muted-foreground">Phone</dt>
+                            <dd className="font-mono tabular-nums">
+                              {
+                                getPhonePresentation(
+                                  contactPhase.contact.phoneNumber,
+                                ).formattedInternational
+                              }
+                            </dd>
+                          </div>
+                          <div className="min-w-0">
+                            <dt className="text-muted-foreground">Country</dt>
+                            <dd>
+                              {contactPhase.contact.countryName ??
+                                contactPresentation?.countryName ??
+                                "—"}
+                              {(contactPhase.contact.countryCode ??
+                                contactPresentation?.countryCode)
+                                ? ` (${contactPhase.contact.countryCode ?? contactPresentation?.countryCode})`
+                                : null}
+                            </dd>
+                          </div>
+                          <div className="min-w-0 sm:col-span-2">
+                            <dt className="text-muted-foreground">
+                              In system since
+                            </dt>
+                            <dd>{formatTs(contactPhase.contact.createTime)}</dd>
+                          </div>
+                        </dl>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="bg-muted/50 space-y-2 rounded-lg border p-3">
+                      <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                        Contact
+                      </p>
+                      <dl className="grid gap-2 text-sm">
+                        <div>
+                          <dt className="text-muted-foreground text-xs">Name</dt>
+                          <dd className="font-medium">
+                            {contactPhase.contact.name?.trim() || "—"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground text-xs">Phone</dt>
+                          <dd className="font-mono text-sm tabular-nums">
+                            {
+                              getPhonePresentation(
+                                contactPhase.contact.phoneNumber,
+                              ).formattedInternational
+                            }
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
+                      Products
+                    </p>
+                    {isDevReviewUi ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-10">#</TableHead>
+                            <TableHead className="min-w-[7rem] whitespace-normal">
+                              Product
+                            </TableHead>
+                            <TableHead>SKU</TableHead>
+                            <TableHead className="text-right">Unit</TableHead>
+                            <TableHead className="text-right">Qty</TableHead>
+                            <TableHead className="text-right">Line total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {reviewSummary.lineRows.map((row) => (
+                            <TableRow key={row.key}>
+                              <TableCell className="text-muted-foreground">
+                                {row.lineNum}
+                              </TableCell>
+                              <TableCell className="max-w-[14rem] whitespace-normal font-medium">
+                                {row.name}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs">
+                                {row.sku}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                USD {row.unit.toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {row.qty}
+                              </TableCell>
+                              <TableCell className="text-right font-medium tabular-nums">
+                                USD {row.lineTotal.toFixed(2)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                        <TableFooter>
+                          <TableRow>
+                            <TableCell
+                              colSpan={5}
+                              className="text-right text-muted-foreground"
+                            >
+                              Order total
+                            </TableCell>
+                            <TableCell className="text-right text-base font-semibold tabular-nums">
+                              USD {reviewSummary.total.toFixed(2)}
+                            </TableCell>
+                          </TableRow>
+                        </TableFooter>
+                      </Table>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="min-w-[8rem] whitespace-normal">
+                              Product
+                            </TableHead>
+                            <TableHead className="text-right">Qty</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {reviewSummary.lineRows.map((row) => (
+                            <TableRow key={row.key}>
+                              <TableCell className="max-w-[16rem] whitespace-normal font-medium">
+                                {row.name}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {row.qty}
+                              </TableCell>
+                              <TableCell className="text-right font-medium tabular-nums">
+                                USD {row.lineTotal.toFixed(2)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                        <TableFooter>
+                          <TableRow>
+                            <TableCell
+                              colSpan={2}
+                              className="text-right text-muted-foreground"
+                            >
+                              Order total
+                            </TableCell>
+                            <TableCell className="text-right text-base font-semibold tabular-nums">
+                              USD {reviewSummary.total.toFixed(2)}
+                            </TableCell>
+                          </TableRow>
+                        </TableFooter>
+                      </Table>
+                    )}
+                    <p className="text-muted-foreground mt-2 text-xs">
+                      Payment status{" "}
+                      <span className="font-medium text-foreground capitalize">
+                        {reviewValues.status}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+              {isDevReviewUi && reviewPayloadJson ? (
+                <div>
+                  <p className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                    CAPI JSON (preview)
+                  </p>
+                  <pre className="bg-muted/50 max-h-[min(50vh,22rem)] overflow-auto rounded-lg border p-3 text-xs">
+                    {reviewPayloadJson}
+                  </pre>
+                </div>
+              ) : null}
+            </div>
+            <DialogFooter className="shrink-0 gap-2 border-t px-6 py-4 sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setNoSessionConfirmOpen(false)}
+                onClick={() => setReviewOpen(false)}
               >
-                Cancel
+                Back
               </Button>
               <Button
                 type="button"
+                disabled={pending || !reviewValues}
                 onClick={() => {
-                  const v = pendingOrderValues;
-                  setNoSessionConfirmOpen(false);
-                  setPendingOrderValues(null);
-                  if (v) runCreateOrder(v);
+                  if (reviewValues) runCreateOrder(reviewValues);
                 }}
               >
-                Create order without session
+                {pending ? (
+                  <>
+                    <Loader2Icon className="mr-2 size-4 animate-spin" />
+                    Creating…
+                  </>
+                ) : (
+                  "Confirm & create order"
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

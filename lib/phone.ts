@@ -17,3 +17,16 @@ export function hashPhoneForMeta(phoneDigitsOrE164: string): string {
   const trimmed = digits.replace(/^0+/, "");
   return createHash("sha256").update(trimmed).digest("hex");
 }
+
+/** Meta `external_id`: SHA-256 of trimmed, lowercased stable id (e.g. contact UUID). */
+export function hashExternalIdForMeta(externalId: string): string {
+  const normalized = externalId.trim().toLowerCase();
+  return createHash("sha256").update(normalized, "utf8").digest("hex");
+}
+
+/** Meta `country`: SHA-256 of ISO 3166-1 alpha-2 lowercase (e.g. `us`). */
+export function hashCountryForMeta(iso3166Alpha2: string): string | null {
+  const c = iso3166Alpha2.trim().toLowerCase();
+  if (c.length !== 2) return null;
+  return createHash("sha256").update(c, "utf8").digest("hex");
+}
