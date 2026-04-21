@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { Providers } from "@/components/providers";
@@ -21,6 +21,13 @@ export const metadata: Metadata = {
   description: "Click-to-WhatsApp sessions, orders, and Meta CAPI",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -32,10 +39,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full`}
       suppressHydrationWarning
     >
-      <body className="bg-background text-foreground min-h-full flex flex-col font-sans antialiased">
+      <body className="bg-background text-foreground flex min-h-dvh min-h-[100svh] flex-col touch-manipulation font-sans antialiased">
         <Providers>
           <SiteHeader />
-          <main className="flex-1 px-4 py-8">{children}</main>
+          <main className="flex-1 px-3 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-4 sm:py-8">
+            {children}
+          </main>
         </Providers>
       </body>
     </html>

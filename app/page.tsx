@@ -20,6 +20,17 @@ import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+function formatOrderWhen(d: Date) {
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(d);
+  } catch {
+    return d.toISOString();
+  }
+}
+
 export default async function DashboardPage() {
   const orderRows = await db
     .select({
@@ -62,13 +73,16 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto w-full max-w-5xl space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Recent orders</h1>
-        <p className="text-muted-foreground text-sm">
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+          Recent orders
+        </h1>
+        <p className="text-muted-foreground text-sm leading-relaxed">
           Latest purchases and whether Meta CAPI received the event.
         </p>
       </div>
-      <div className="rounded-xl border">
-        <Table>
+      <div className="-mx-3 overflow-x-auto sm:mx-0">
+        <div className="inline-block min-w-full overflow-hidden rounded-xl border align-middle">
+        <Table className="min-w-[36rem]">
           <TableHeader>
             <TableRow>
               <TableHead>Phone</TableHead>
@@ -120,8 +134,8 @@ export default async function DashboardPage() {
                         <Badge variant="secondary">pending</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-right text-xs">
-                      {r.createdAt.toISOString()}
+                    <TableCell className="text-muted-foreground whitespace-nowrap text-right text-xs">
+                      {formatOrderWhen(r.createdAt)}
                     </TableCell>
                   </TableRow>
                 );
@@ -129,6 +143,7 @@ export default async function DashboardPage() {
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
     </div>
   );

@@ -37,6 +37,16 @@ export type CreateOrderResult = CreateOrderSuccess | { ok: false; error: string 
 
 const PREVIEW_ORDER_ID = "PREVIEW";
 
+/** Shown in review UI and returned on create when there is no CTWA session / ctwa_clid (CAPI not sent). */
+const CAPI_SKIPPED_NO_CTWA_PAYLOAD_JSON = JSON.stringify(
+  {
+    note: "Meta CAPI will not be sent: this contact has no CTWA session (no ctwa_clid from a Click-to-WhatsApp referral). The order can still be created.",
+    capiSkipped: true,
+  },
+  null,
+  2,
+);
+
 export async function previewOrderCapiPayload(
   input: CreateOrderInput,
 ): Promise<{ ok: true; payloadJson: string } | { ok: false; error: string }> {
@@ -106,6 +116,10 @@ export async function previewOrderCapiPayload(
 
   const ctwaClid = latestSession?.ctwaClid?.trim() || null;
   const wabaId = latestSession?.wabaId ?? null;
+
+  if (!ctwaClid) {
+    return { ok: true, payloadJson: CAPI_SKIPPED_NO_CTWA_PAYLOAD_JSON };
+  }
 
   if (process.env.NODE_ENV !== "production") {
     if (!process.env.META_TEST_EVENT_CODE?.trim()) {
@@ -256,36 +270,41 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 
   const ctwaClid = latestSession?.ctwaClid?.trim() || null;
   const wabaId = latestSession?.wabaId ?? null;
+  const skipCapi = !ctwaClid;
 
-  const metaParams = {
-    orderId: orderPk,
-    orderCreatedAt,
-    contactId: contact.id,
-    countryCode: contact.countryCode,
-    value: orderTotal,
-    currency: APP_CURRENCY,
-    totalQuantity,
-    lines: resolved.map((r) => ({
-      sku: r.product.sku,
-      productName: r.product.name,
-      quantity: r.quantity,
-      lineValue: r.lineValue,
-    })),
-    ctwaClid,
-    whatsappBusinessAccountId: wabaId,
-    phoneDigits: e164ToDigits(contact.phoneNumber),
-  };
+  let eventId = "";
+  let capiPayloadJson = CAPI_SKIPPED_NO_CTWA_PAYLOAD_JSON;
 
-  let capiResult: Awaited<ReturnType<typeof sendMetaPurchaseEvent>>;
-  try {
-    capiResult = await sendMetaPurchaseEvent(metaParams);
-  } catch (e) {
-    console.error("[createOrder] Meta CAPI failed", e);
-    const message = e instanceof Error ? e.message : "Meta CAPI request failed";
-    return { ok: false, error: message };
+  if (!skipCapi) {
+    const metaParams = {
+      orderId: orderPk,
+      orderCreatedAt,
+      contactId: contact.id,
+      countryCode: contact.countryCode,
+      value: orderTotal,
+      currency: APP_CURRENCY,
+      totalQuantity,
+      lines: resolved.map((r) => ({
+        sku: r.product.sku,
+        productName: r.product.name,
+        quantity: r.quantity,
+        lineValue: r.lineValue,
+      })),
+      ctwaClid,
+      whatsappBusinessAccountId: wabaId,
+      phoneDigits: e164ToDigits(contact.phoneNumber),
+    };
+
+    try {
+      const capiResult = await sendMetaPurchaseEvent(metaParams);
+      eventId = capiResult.eventId;
+      capiPayloadJson = capiResult.payloadJson;
+    } catch (e) {
+      console.error("[createOrder] Meta CAPI failed", e);
+      const message = e instanceof Error ? e.message : "Meta CAPI request failed";
+      return { ok: false, error: message };
+    }
   }
-
-  const { eventId, payloadJson: sentJson } = capiResult;
 
   const [inserted] = await db
     .insert(orders)
@@ -296,8 +315,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       value: orderTotal.toFixed(4),
       currency: APP_CURRENCY,
       status: data.status,
-      capiSent: true,
-      capiEventId: eventId,
+      capiSent: !skipCapi,
+      capiEventId: skipCapi ? null : eventId,
       createdAt: orderCreatedAt,
       updatedAt: orderCreatedAt,
     })
@@ -306,8 +325,9 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   if (!inserted) {
     return {
       ok: false,
-      error:
-        "Meta event was sent but the order could not be saved. Check Meta Events Manager and try again or reconcile manually.",
+      error: skipCapi
+        ? "Could not create order."
+        : "Meta event was sent but the order could not be saved. Check Meta Events Manager and try again or reconcile manually.",
     };
   }
 
@@ -327,8 +347,9 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     await db.delete(orders).where(eq(orders.id, inserted.id));
     return {
       ok: false,
-      error:
-        "Meta event was sent but line items failed to save. The order was removed; check Meta for a duplicate if you retry.",
+      error: skipCapi
+        ? "Could not save order lines."
+        : "Meta event was sent but line items failed to save. The order was removed; check Meta for a duplicate if you retry.",
     };
   }
 
@@ -339,9 +360,9 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   return {
     ok: true,
     orderId: orderPk,
-    capiSent: true,
-    capiEventId: eventId,
-    capiPayloadJson: sentJson,
+    capiSent: !skipCapi,
+    capiEventId: skipCapi ? "" : eventId,
+    capiPayloadJson,
     capiError: null,
   };
 }

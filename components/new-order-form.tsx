@@ -261,7 +261,11 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
         setReviewOpen(false);
         setReviewPayloadJson(null);
         setReviewValues(null);
-        toast.success(`Order ${res.orderId} saved.`);
+        toast.success(
+          res.capiSent
+            ? `Order ${res.orderId} saved.`
+            : `Order ${res.orderId} saved (Meta CAPI skipped — no CTWA session).`,
+        );
         router.push(`/orders/${res.orderId}/confirmation`);
         form.reset({
           phone: values.phone,
@@ -293,18 +297,18 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
   }
 
   return (
-    <Card className="mx-auto w-full max-w-xl">
-      <CardHeader className="space-y-1 pb-4">
-        <CardTitle className="text-xl">New order</CardTitle>
-        <CardDescription>
+    <Card className="mx-auto w-full max-w-xl shadow-sm">
+      <CardHeader className="space-y-1 px-4 pb-4 pt-5 sm:px-6 sm:pt-6">
+        <CardTitle className="text-lg sm:text-xl">New order</CardTitle>
+        <CardDescription className="text-pretty leading-relaxed">
           The phone must match a contact already in the system (from WhatsApp).
           The latest CTWA session is used when present (for{" "}
-          <code className="text-xs">ctwa_clid</code>); otherwise Meta CAPI is
-          sent without it. You will review the payload before the order is
-          created.
+          <code className="text-xs">ctwa_clid</code>); otherwise the order is
+          saved and Meta CAPI is skipped. You will review the payload before the
+          order is created.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 pb-6 sm:px-6">
         <Form {...form}>
           <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)}>
             {/* Attribution: compact phone + flexible session */}
@@ -321,7 +325,7 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
                       <FormLabel>Phone</FormLabel>
                       <FormControl>
                         <Input
-                          className="h-9 font-mono text-sm tabular-nums"
+                          className="h-10 min-h-10 font-mono text-base tabular-nums sm:h-9 sm:min-h-0 sm:text-sm"
                           placeholder="+1 555…"
                           autoComplete="tel"
                           inputMode="tel"
@@ -343,7 +347,7 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
                         <Input
                           readOnly
                           tabIndex={-1}
-                          className="h-9 w-full min-w-0 max-w-full cursor-default bg-muted/50 font-mono text-sm"
+                          className="h-10 min-h-10 w-full min-w-0 max-w-full cursor-default bg-muted/50 font-mono text-sm sm:h-9 sm:min-h-0"
                           disabled={loadingPhoneData}
                           value={
                             latestSession
@@ -638,7 +642,7 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
             </div>
 
             <Button
-              className="w-full sm:w-auto"
+              className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto"
               disabled={submitDisabled || reviewLoading}
               type="submit"
             >
@@ -664,8 +668,8 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
             }
           }}
         >
-          <DialogContent className="flex max-h-[min(90vh,40rem)] max-w-2xl flex-col gap-0 p-0">
-            <DialogHeader className="shrink-0 border-b px-6 py-4">
+          <DialogContent className="flex h-[min(90dvh,40rem)] max-h-[min(90dvh,40rem)] w-[calc(100vw-1rem)] max-w-[42rem] flex-col gap-0 p-0 sm:h-auto sm:max-h-[min(90vh,40rem)] sm:w-full">
+            <DialogHeader className="shrink-0 border-b px-4 py-3 sm:px-6 sm:py-4">
               <DialogTitle>Review order &amp; CAPI payload</DialogTitle>
               <DialogDescription>
                 {isDevReviewUi ? (
@@ -684,7 +688,7 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
                 )}
               </DialogDescription>
             </DialogHeader>
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6 sm:py-4">
               {reviewValues && contactPhase.status === "found" && reviewSummary ? (
                 <div className="space-y-4 text-sm">
                   {isDevReviewUi ? (
@@ -902,22 +906,24 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
                   <p className="text-muted-foreground mb-2 text-xs font-medium uppercase">
                     CAPI JSON (preview)
                   </p>
-                  <pre className="bg-muted/50 max-h-[min(50vh,22rem)] overflow-auto rounded-lg border p-3 text-xs">
+                  <pre className="bg-muted/50 max-h-[min(50vh,22rem)] overflow-auto break-words rounded-lg border p-3 text-[0.7rem] leading-relaxed sm:text-xs">
                     {reviewPayloadJson}
                   </pre>
                 </div>
               ) : null}
             </div>
-            <DialogFooter className="shrink-0 gap-2 border-t px-6 py-4 sm:justify-end">
+            <DialogFooter className="mx-0 mb-0 shrink-0 gap-2 border-t bg-muted/30 px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4">
               <Button
                 type="button"
                 variant="outline"
+                className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto"
                 onClick={() => setReviewOpen(false)}
               >
                 Back
               </Button>
               <Button
                 type="button"
+                className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto"
                 disabled={pending || !reviewValues}
                 onClick={() => {
                   if (reviewValues) runCreateOrder(reviewValues);

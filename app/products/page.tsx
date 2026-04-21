@@ -22,10 +22,10 @@ export default async function ProductsPage() {
   const productRows = await listProducts();
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-8">
+    <div className="mx-auto w-full max-w-5xl space-y-6 sm:space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
-        <p className="text-muted-foreground text-sm">
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Products</h1>
+        <p className="text-muted-foreground text-sm leading-relaxed">
           Catalog used when creating orders and CAPI item payloads. All amounts are USD.
         </p>
       </div>
@@ -40,8 +40,9 @@ export default async function ProductsPage() {
         </CardContent>
       </Card>
 
-      <div className="rounded-xl border">
-        <Table>
+      <div className="-mx-3 overflow-x-auto sm:mx-0">
+        <div className="inline-block min-w-full overflow-hidden rounded-xl border align-middle">
+        <Table className="min-w-[32rem]">
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
@@ -75,6 +76,7 @@ export default async function ProductsPage() {
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
     </div>
   );

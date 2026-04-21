@@ -50,15 +50,22 @@ export function OrderConfirmationClient({ orderId, data }: Props) {
   const presentation = getPhonePresentation(contact.phoneNumber);
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Order confirmed</h1>
-          <p className="text-muted-foreground font-mono text-sm">{order.id}</p>
+    <div className="mx-auto w-full max-w-3xl space-y-5 sm:space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+            Order confirmed
+          </h1>
+          <p className="text-muted-foreground break-all font-mono text-sm">
+            {order.id}
+          </p>
         </div>
         <Link
           href="/orders/new"
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "min-h-11 w-full shrink-0 justify-center touch-manipulation sm:min-h-8 sm:w-auto",
+          )}
         >
           New order
         </Link>
@@ -153,7 +160,7 @@ export function OrderConfirmationClient({ orderId, data }: Props) {
                 <p className="text-muted-foreground mb-2 text-xs font-medium uppercase">
                   Payload
                 </p>
-                <pre className="bg-muted/50 max-h-[min(28rem,50vh)] overflow-auto rounded-lg border p-3 text-xs">
+                <pre className="bg-muted/50 max-h-[min(28rem,50vh)] overflow-auto break-words rounded-lg border p-3 text-[0.7rem] leading-relaxed sm:text-xs">
                   {capiMeta.capiPayloadJson}
                 </pre>
               </div>

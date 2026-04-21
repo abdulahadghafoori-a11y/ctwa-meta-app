@@ -141,7 +141,11 @@ export function ProductForm() {
           )}
         />
         <div className="sm:col-span-2">
-          <Button disabled={pending} type="submit">
+          <Button
+            className="min-h-11 w-full touch-manipulation sm:min-h-8 sm:w-auto"
+            disabled={pending}
+            type="submit"
+          >
             {pending ? (
               <>
                 <Loader2Icon className="mr-2 size-4 animate-spin" />
