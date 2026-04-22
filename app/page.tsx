@@ -1,4 +1,5 @@
 import { desc, eq, inArray } from "drizzle-orm";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -31,11 +32,21 @@ function formatOrderWhen(d: Date) {
   }
 }
 
-export default async function DashboardPage() {
-  const orderRows = await db
+type SearchParams = { contactId?: string };
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const { contactId } = await searchParams;
+  const filterContactId = contactId?.trim() || undefined;
+
+  const orderListBase = db
     .select({
       id: orders.id,
       phone: contacts.phoneNumber,
+      contactId: contacts.id,
       ctwa: ctwaSessions.ctwaClid,
       value: orders.value,
       currency: orders.currency,
@@ -44,7 +55,12 @@ export default async function DashboardPage() {
     })
     .from(orders)
     .innerJoin(contacts, eq(orders.contactId, contacts.id))
-    .leftJoin(ctwaSessions, eq(orders.ctwaSessionId, ctwaSessions.id))
+    .leftJoin(ctwaSessions, eq(orders.ctwaSessionId, ctwaSessions.id));
+
+  const orderRows = await (filterContactId
+    ? orderListBase.where(eq(orders.contactId, filterContactId))
+    : orderListBase
+  )
     .orderBy(desc(orders.createdAt))
     .limit(50);
 
@@ -79,6 +95,27 @@ export default async function DashboardPage() {
         <p className="text-muted-foreground text-sm leading-relaxed">
           Latest purchases and whether Meta CAPI received the event.
         </p>
+        {filterContactId && orderRows[0] ? (
+          <p className="mt-2 text-sm">
+            <span className="text-muted-foreground">Filtered by contact</span>{" "}
+            <span className="font-mono text-xs">{orderRows[0].phone}</span> ·{" "}
+            <Link
+              className="text-primary underline underline-offset-2"
+              href="/"
+            >
+              Clear filter
+            </Link>
+          </p>
+        ) : filterContactId && orderRows.length === 0 ? (
+          <p className="mt-2 text-sm">
+            <span className="text-muted-foreground">
+              No orders for this contact yet.
+            </span>{" "}
+            <Link className="underline underline-offset-2" href="/">
+              Show all orders
+            </Link>
+          </p>
+        ) : null}
       </div>
       <div className="-mx-3 overflow-x-auto sm:mx-0">
         <div className="inline-block min-w-full overflow-hidden rounded-xl border align-middle">

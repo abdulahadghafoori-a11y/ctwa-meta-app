@@ -107,7 +107,14 @@ function defaultLine(products: ProductRow[]) {
   };
 }
 
-export function NewOrderForm({ products }: { products: ProductRow[] }) {
+export function NewOrderForm({
+  products,
+  initialPhone,
+}: {
+  products: ProductRow[];
+  /** E.164 from `?phone=` (e.g. from Contacts) */
+  initialPhone?: string;
+}) {
   const router = useRouter();
   const [sessions, setSessions] = useState<CtwaSessionRow[]>([]);
   const [loadingPhoneData, setLoadingPhoneData] = useState(false);
@@ -125,7 +132,7 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
   const form = useForm<FormValues>({
     resolver: zodResolver(newOrderFormSchema),
     defaultValues: {
-      phone: "",
+      phone: initialPhone?.trim() ?? "",
       ctwaSessionId: "",
       lines: [defaultLine(products)],
       status: "paid",
@@ -138,6 +145,12 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
     control,
     name: "lines",
   });
+
+  useEffect(() => {
+    if (initialPhone?.trim()) {
+      setValue("phone", initialPhone.trim());
+    }
+  }, [initialPhone, setValue]);
 
   const phone = form.watch("phone");
   const lines = form.watch("lines");

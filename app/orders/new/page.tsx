@@ -3,7 +3,15 @@ import { listProducts } from "@/actions/products";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewOrderPage() {
+type SearchParams = { phone?: string };
+
+export default async function NewOrderPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const sp = await searchParams;
+  const initialPhone = (sp.phone ?? "").trim() || undefined;
   const products = await listProducts();
 
   return (
@@ -25,7 +33,7 @@ export default async function NewOrderPage() {
           .
         </p>
       ) : (
-        <NewOrderForm products={products} />
+        <NewOrderForm products={products} initialPhone={initialPhone} />
       )}
     </div>
   );
