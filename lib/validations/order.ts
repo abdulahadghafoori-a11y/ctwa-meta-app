@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { kabulDateTimeLocalToDate } from "@/lib/kabul-time";
+
 export const orderStatuses = [
   "pending",
   "paid",
@@ -20,12 +22,31 @@ const orderLineSchema = z.object({
   quantity: z.number().int().min(1).max(99_999),
 });
 
+/**
+ * CAPI `event_time` / order time: wall clock in Kabul (from `datetime-local`, interpreted as Asia/Kabul).
+ */
+const capiEventTimeKabulField = z
+  .string()
+  .min(1, "Set the event time (Kabul)")
+  .refine(
+    (s) => {
+      try {
+        kabulDateTimeLocalToDate(s);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { message: "Invalid date and time" },
+  );
+
 export const createOrderSchema = z.object({
   phone: z.string().min(6),
   ctwaSessionId: ctwaSessionIdField,
   lines: z.array(orderLineSchema).min(1).max(50),
   orderId: z.string().optional(),
   status: z.enum(orderStatuses),
+  capiEventTimeKabul: capiEventTimeKabulField,
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;

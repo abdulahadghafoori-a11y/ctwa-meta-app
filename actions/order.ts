@@ -17,6 +17,10 @@ import {
   sendMetaPurchaseEvent,
   serializeMetaPayload,
 } from "@/lib/meta-capi";
+import {
+  isWithinMetaEventTimeWindow,
+  kabulDateTimeLocalToDate,
+} from "@/lib/kabul-time";
 import { e164ToDigits, parseToE164 } from "@/lib/phone";
 import {
   APP_CURRENCY,
@@ -107,6 +111,20 @@ export async function previewOrderCapiPayload(
   const orderTotal = resolved.reduce((s, r) => s + r.lineValue, 0);
   const totalQuantity = resolved.reduce((s, r) => s + r.quantity, 0);
 
+  let orderEventAt: Date;
+  try {
+    orderEventAt = kabulDateTimeLocalToDate(data.capiEventTimeKabul);
+  } catch {
+    return { ok: false, error: "Invalid event time (Kabul)." };
+  }
+  if (!isWithinMetaEventTimeWindow(orderEventAt)) {
+    return {
+      ok: false,
+      error:
+        "Event time cannot be more than 7 days in the past (Meta CAPI limit).",
+    };
+  }
+
   const [latestSession] = await db
     .select()
     .from(ctwaSessions)
@@ -133,7 +151,7 @@ export async function previewOrderCapiPayload(
 
   const { payload } = buildMetaPurchasePayload({
     orderId: PREVIEW_ORDER_ID,
-    orderCreatedAt: new Date(),
+    orderCreatedAt: orderEventAt,
     contactId: contact.id,
     countryCode: contact.countryCode,
     value: orderTotal,
@@ -259,7 +277,20 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const totalQuantity = resolved.reduce((s, r) => s + r.quantity, 0);
 
   const orderPk = data.orderId?.trim() || `ORD-${nanoid(10).toUpperCase()}`;
-  const orderCreatedAt = new Date();
+
+  let orderEventAt: Date;
+  try {
+    orderEventAt = kabulDateTimeLocalToDate(data.capiEventTimeKabul);
+  } catch {
+    return { ok: false, error: "Invalid event time (Kabul)." };
+  }
+  if (!isWithinMetaEventTimeWindow(orderEventAt)) {
+    return {
+      ok: false,
+      error:
+        "Event time cannot be more than 7 days in the past (Meta CAPI limit).",
+    };
+  }
 
   const [latestSession] = await db
     .select()
@@ -278,7 +309,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   if (!skipCapi) {
     const metaParams = {
       orderId: orderPk,
-      orderCreatedAt,
+      orderCreatedAt: orderEventAt,
       contactId: contact.id,
       countryCode: contact.countryCode,
       value: orderTotal,
@@ -317,8 +348,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       status: data.status,
       capiSent: !skipCapi,
       capiEventId: skipCapi ? null : eventId,
-      createdAt: orderCreatedAt,
-      updatedAt: orderCreatedAt,
+      createdAt: orderEventAt,
+      updatedAt: orderEventAt,
     })
     .returning();
 

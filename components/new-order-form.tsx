@@ -61,6 +61,10 @@ import { summarizeCtwaSessionLabel } from "@/lib/referral";
 import { getPhonePresentation } from "@/lib/phone-display";
 import { isValidE164Input } from "@/lib/phone-e164";
 import {
+  describeKabulLocalForMeta,
+  getDefaultKabulDateTimeLocal,
+} from "@/lib/kabul-time";
+import {
   type NewOrderFormInput,
   newOrderFormSchema,
   orderStatuses,
@@ -125,6 +129,7 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
       ctwaSessionId: "",
       lines: [defaultLine(products)],
       status: "paid",
+      capiEventTimeKabul: getDefaultKabulDateTimeLocal(),
     },
   });
 
@@ -272,6 +277,7 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
           ctwaSessionId: sessions[0]?.id ?? "",
           lines: [defaultLine(products)],
           status: "paid",
+          capiEventTimeKabul: getDefaultKabulDateTimeLocal(),
         } satisfies FormValues);
       })();
     });
@@ -613,31 +619,67 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
               <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
                 Order details
               </p>
-              <div className="max-w-[12rem]">
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+              <div className="flex max-w-full flex-col gap-4 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-end">
+                <div className="max-w-[12rem]">
+                  <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Status</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger size="sm" className="h-9 w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {orderStatuses.map((s) => (
+                              <SelectItem key={s} value={s}>
+                                {s}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="min-w-0 max-w-full sm:min-w-[11rem] sm:max-w-[20rem] sm:flex-1">
+                  <FormField
+                    control={form.control}
+                    name="capiEventTimeKabul"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          Event time{" "}
+                          <span className="text-muted-foreground font-normal">
+                            (Kabul · UTC+4:30)
+                          </span>
+                        </FormLabel>
                         <FormControl>
-                          <SelectTrigger size="sm" className="h-9 w-full">
-                            <SelectValue />
-                          </SelectTrigger>
+                          <Input
+                            className="h-9 font-mono text-sm tabular-nums"
+                            type="datetime-local"
+                            step={60}
+                            name={field.name}
+                            onBlur={field.onBlur}
+                            ref={field.ref}
+                            value={field.value}
+                            onChange={field.onChange}
+                          />
                         </FormControl>
-                        <SelectContent>
-                          {orderStatuses.map((s) => (
-                            <SelectItem key={s} value={s}>
-                              {s}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        <p className="text-muted-foreground text-xs leading-relaxed">
+                          Used for Meta CAPI <code className="text-xs">event_time</code>{" "}
+                          (Unix seconds, GMT) and the order timestamp. The value is the
+                          local date and time in Kabul, not your device timezone.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
             </div>
 
@@ -794,6 +836,20 @@ export function NewOrderForm({ products }: { products: ProductRow[] }) {
                       </dl>
                     </div>
                   )}
+
+                  <div className="bg-muted/40 rounded-lg border px-3 py-2 text-xs">
+                    <p className="text-muted-foreground font-medium tracking-wide uppercase">
+                      CAPI event time
+                    </p>
+                    <p className="mt-1 break-words font-mono tabular-nums leading-relaxed">
+                      {(() => {
+                        const x = describeKabulLocalForMeta(
+                          reviewValues.capiEventTimeKabul,
+                        );
+                        return `${x.kabulLabel} (Kabul) · event_time ${x.unixSeconds} (Unix s)`;
+                      })()}
+                    </p>
+                  </div>
 
                   <div>
                     <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
